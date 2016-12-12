@@ -10,6 +10,25 @@ int main(void)
 		perror("open");
 	}
 	printf("open seccess fd = %d\n",fd);
-	while(1);
+	char flag =  0;
+	int buff = 0;
+	char tmp[20];
+	while(1)
+	{	
+		flag = getchar();
+		gets(tmp);
+		switch(flag)
+		{
+			case 'r' :
+				read(fd,buff,1);
+				break;
+			case 'w' :
+				write(fd,buff,1);
+				break;
+			default :
+				printf("unkonw cmd\n");
+				break;
+		}	
+	}
 	return 0;
 }
