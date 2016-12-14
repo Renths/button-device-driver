@@ -30,6 +30,15 @@ int main(void)
 				printf("unkonw cmd\n");
 				break;
 		}	
+		if(flag == 'p')
+		break;
+	}
+
+	while(1)
+	{
+		printf("reading\t");
+		read(fd,buff,1);
+		printf("get meg:%d\n",*buff);
 	}
 	return 0;
 }

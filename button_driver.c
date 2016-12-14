@@ -13,7 +13,7 @@
 MODULE_LICENSE("GPL");
 
 /*调试信息开关*/
-#define DEBUG_ABLE 
+//#define DEBUG_ABLE 
 #ifdef DEBUG_ABLE
 #define DEBUG(msg,...) printk("----debug line:%d\t",__LINE__);printk(msg,##__VA_ARGS__)
 #else 
@@ -67,6 +67,7 @@ struct button_t
 	int num;						//设备编号
 	u8 date[DATE_SIZE];			//内核缓存
 	u32 date_len;		//数据长度
+	u8 button_status;	//1表示按下，0表示没按下
 	struct device * dev_device	;
 	struct cdev cdev;
 	struct semaphore sem;		
@@ -75,7 +76,7 @@ struct button_t * button_p = NULL;	//内存中设备地址
 wait_queue_head_t button_que;		 //等待队列
 
 /*按键寄存器虚拟地址 --当考虑移植性时，应该使用内核提供的那一套*/
-//const 地址不允许改变，但是内容允许改变
+//const 地址不允许改变，但是内容允许改变 (待优化)加const可以让程序更强健
 volatile unsigned int * button_vir_adr = NULL; //映射的io虚拟内存
 volatile unsigned int * GPG_CON = NULL;
 volatile unsigned int * GPG_DAT = NULL;
@@ -91,6 +92,7 @@ int button_open (struct inode *inod, struct file *filp)
 	struct button_t * cdevp = NULL;
 	cdevp = container_of(inod->i_cdev,struct button_t,cdev);
 	filp->private_data = cdevp;
+	cdevp->date_len = 0;//初始化一下数据长度
 	DEBUG("geting semaphore...\n");
 	
 	if (down_interruptible(&cdevp->sem))//获取信号量，没获取到将会阻塞，可中断
@@ -99,7 +101,8 @@ int button_open (struct inode *inod, struct file *filp)
 		return -EINTR;//中断返回
 	}
 	DEBUG("geted semaphore,continu...\n");
-	
+
+	DEBUG("date_len =%d\t f_pos = %d\n",cdevp->date_len,(int)filp->f_pos);
 	return 0;
 }
 
@@ -127,13 +130,13 @@ ssize_t button_read (struct file *filp, char __user * ubuff,
 
 	while (pos > cdevp->date_len )
 	{
-		printk("pos great than date_len, go sleep~~~ \n");
+		DEBUG("pos great than date_len, go sleep~~~ \n");
 		up(&cdevp->sem);//先释放信号量，马上进入睡眠
 		if ( wait_event_interruptible(button_que, !(pos > cdevp->date_len)) )
 			return -EINTR;
 		down_interruptible(&cdevp->sem);
 		
-		printk("wake up\n");	
+		DEBUG("wake up\n");	
 	}
 
 	if( cnt < (cdevp->date_len - pos) )
@@ -161,9 +164,9 @@ ssize_t button_read (struct file *filp, char __user * ubuff,
 /*中断处理函数*/
 irqreturn_t button_irq_handler(int irq, void *pam)
 {
-	int event = -1;//记录事件
+	int tmp = -1;//
 	struct button_t * cdevp = &button_p[0]; //只操作第一个设备
-	printk("entry interrupt\n");
+	DEBUG("entry interrupt\n");
 	if(BUTTON_COUNT > 1) //在中断函数中，无法找到是哪个设备产生的中断，所以不支持多设备
 	{
 		printk("warning: in irq_handler just support one device,there is %d device\n",BUTTON_COUNT);
@@ -182,34 +185,46 @@ irqreturn_t button_irq_handler(int irq, void *pam)
 	{
 		case 1:
 			*GPG_CON &= (BUTTON1_SET_IN);//临时设置为输入
-			event = (*GPG_DAT) &0x1;;
-			*GPG_CON = (BUTTON1_SET_EINT);//读取数据后重新设置为中断
+			tmp = (*GPG_DAT) &(0x1 << 0);
+			*GPG_CON |= (BUTTON1_SET_EINT);//读取数据后重新设置为中断
 			break;
 		case 2:
-
+			*GPG_CON &= (BUTTON2_SET_IN);//临时设置为输入
+			tmp = (*GPG_DAT) &(0x1 << 3);
+			*GPG_CON |= (BUTTON2_SET_EINT);
 			break;
 
 		case 3:
-
+			*GPG_CON &= (BUTTON3_SET_IN);//临时设置为输入
+			tmp = (*GPG_DAT) &(0x1 << 5);
+			*GPG_CON |= (BUTTON3_SET_EINT);
 			break;
 		case 4:
-
+			*GPG_CON &= (BUTTON4_SET_IN);//临时设置为输入
+			tmp = (*GPG_DAT) &(0x1 << 6);
+			*GPG_CON |= (BUTTON4_SET_EINT);
 			break;
 		case 5:
-
+			*GPG_CON &= (BUTTON5_SET_IN);//临时设置为输入
+			tmp = (*GPG_DAT) &(0x1 << 7);
+			*GPG_CON |= (BUTTON5_SET_EINT);
 			break;
 		case 6:
-
+			*GPG_CON &= (BUTTON6_SET_IN);//临时设置为输入
+			tmp = (*GPG_DAT) &(0x1 << 11);
+			*GPG_CON |= (BUTTON6_SET_EINT);
 			break;
 	}
-	DEBUG("event = %d\n",event);
-	if(0 == event)
-	{
-		printk("%d button down\n",(int)pam);
+	DEBUG("TMP = %d\n",tmp);
+	if(0 == tmp)
+	{	
+		DEBUG("%d button down\n",(int)pam);
+		cdevp->button_status = 1;
 	}
-	else if(1 == event)
+	else 
 	{
-		printk("%d button up\n",(int)pam);
+		DEBUG("%d button up\n",(int)pam);
+		cdevp->button_status = 0;
 	}
 	
 	cdevp->date_len++; 
