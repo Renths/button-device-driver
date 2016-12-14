@@ -11,7 +11,7 @@ int main(void)
 	}
 	printf("open seccess fd = %d\n",fd);
 	char flag =  0;
-	int buff = 0;
+	int buff[1];
 	char tmp[20];
 	while(1)
 	{	
@@ -21,6 +21,7 @@ int main(void)
 		{
 			case 'r' :
 				read(fd,buff,1);
+				printf("user buff:%d",*buff);
 				break;
 			case 'w' :
 				write(fd,buff,1);
