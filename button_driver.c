@@ -185,7 +185,7 @@ irqreturn_t button_irq_handler(int irq, void *pam)
 	{
 		case 1:
 			*GPG_CON &= (BUTTON1_SET_IN);//临时设置为输入
-			tmp = (*GPG_DAT) &(0x1 << 0);
+			tmp = (*GPG_DAT) &(0x1 << 0);//硬件相关
 			*GPG_CON |= (BUTTON1_SET_EINT);//读取数据后重新设置为中断
 			break;
 		case 2:
@@ -215,6 +215,8 @@ irqreturn_t button_irq_handler(int irq, void *pam)
 			*GPG_CON |= (BUTTON6_SET_EINT);
 			break;
 	}
+
+	/*能辨别出按下还是弹起，但是这个数据没有传给用户层(待优化)*/
 	DEBUG("TMP = %d\n",tmp);
 	if(0 == tmp)
 	{	
@@ -232,7 +234,7 @@ irqreturn_t button_irq_handler(int irq, void *pam)
 	
 	DEBUG("date = %d\n",(int)pam);
 	wake_up_interruptible(&button_que);
-	/*登记底部函数  待拓展*/
+	/*登记底部函数  (待拓展)，将上面大部分放在底部函数，可以提高中断速度*/
 	//schedule_work(&);
 	return 0;
 
@@ -447,4 +449,4 @@ void __exit button_exit(void)
 
 module_init(button_init);
 module_exit(button_exit);
-//考虑将阻塞放在open和relase中
+//考虑将init函数分成多个小函数
